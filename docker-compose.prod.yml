@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  fastapi:
+    image: katadia/ml-service:latest  # Will be pulled from Docker Hub
+    container_name: katadia-ml
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./models:/app/models
+    networks:
+      - katadia-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: katadia-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - fastapi
+    networks:
+      - katadia-network
+
+networks:
+  katadia-network:
+    driver: bridge
