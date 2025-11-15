@@ -1,0 +1,261 @@
+# Virtual Environments
+.venv/
+.venv311/
+venv/
+env/
+ENV/
+.env.local
+.env.*.local
+
+# Environment variables
+.env
+.env.example.local
+.env.production.local
+.env.development.local
+.env.test.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask
+instance/
+.webassets-cache
+
+# Scrapy
+.scrapy
+
+# Sphinx
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# IPython
+profile_default/
+ipython_config.py
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.venv
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Datasets (Large files - already trained)
+datasets/
+speechocean762-1.2.0/
+WAVE/
+*.wav
+*.mp3
+
+# ML Models (exclude all - use external storage or Azure Blob)
+models/**/*.safetensors
+models/**/*.bin
+models/**/*.pt
+models/*/checkpoint-*/
+
+# Logs
+logs/
+*.log
+log/
+*.log.*
+
+# Temporary files
+temp_audio/
+temp/
+tmp/
+*.tmp
+.tmp/
+
+# Data processing
+data/raw/
+data/processed_english/
+data/temp/
+*.csv
+*.xlsx
+*.parquet
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+.docker/
+.dockerignore
+
+# AWS/Cloud credentials
+*.pem
+*.key
+*.p8
+credentials
+~/.aws/
+
+# Git
+.git/
+.gitmodules
+
+# Package managers
+package-lock.json
+yarn.lock
+
+# Node modules (if any frontend)
+node_modules/
+
+# Build artifacts
+*.zip
+*.tar.gz
+*.rar
+
+# Misc
+.cache/
+.vscode-settings/
+.ipynb_checkpoints/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Azure
+.azurerc
+*.publishsettings
+PublishSettings.xml
+
+# Railway/Deployment
+railway.json
+Procfile
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# MacOS
+.AppleDouble
+.LSOverride
+*.localized
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Distribution
+build/
+dist/
+*.whl
+*.egg
+*.tar.gz
+
+# Pytest
+.pytest_cache/
+.coverage
+
+# Redis dump
+dump.rdb
+appendonly.aof
+
+# Documentation
+docs
+documentation
+
+# Credentials
+google-credentials.json
+
+models

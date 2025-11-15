@@ -1,0 +1,19 @@
+# PyTorch
+torch>=2.9.1
+torchaudio>=2.9.1
+
+# Transformers and audio processing
+transformers==4.36.0
+datasets>=2.14.0
+librosa==0.10.1
+numpy>=1.24,<3.0
+pandas==2.1.3
+scipy==1.11.4
+
+# Speech processing
+google-cloud-speech==2.21.0
+google-cloud-texttospeech>=2.15.0,<3.0
+google-generativeai>=0.3.0
+openai-whisper==20231117
+praatio==5.1.0
+montreal-forced-aligner==2.2.13
