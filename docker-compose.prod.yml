@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   fastapi:
-    image: katadia/ml-service:latest  # Will be pulled from Docker Hub
+    image: hshinosa/ml-service:latest  # Will be pulled from Docker Hub
     container_name: katadia-ml
     restart: unless-stopped
     ports:

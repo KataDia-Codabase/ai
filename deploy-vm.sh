@@ -42,11 +42,11 @@ LOG_LEVEL=INFO
 EOF
 
 # Build and start containers
-echo "Building Docker images..."
-docker-compose build
+echo "Pulling Docker image from Docker Hub..."
+docker-compose -f docker-compose.prod.yml pull
 
 echo "Starting containers..."
-docker-compose up -d
+docker-compose -f docker-compose.prod.yml up -d
 
 echo "=== Deployment Complete! ==="
 echo "API accessible at: http://52.163.118.71"
