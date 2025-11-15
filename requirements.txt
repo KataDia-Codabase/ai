@@ -28,6 +28,19 @@ sentry-sdk[fastapi]==1.38.0
 # Audio processing
 soundfile==0.12.1
 pydub==0.25.1
+librosa==0.10.1
+
+# Google Cloud APIs (for STT/TTS)
+google-cloud-speech==2.21.0
+google-cloud-texttospeech>=2.15.0,<3.0
+google-generativeai>=0.3.0
+
+# ML Runtime (required by services)
+torch>=2.0.1
+openai-whisper==20231117
+transformers==4.36.0
+numpy>=1.24,<2.0
+scipy==1.11.4
 
 # Configuration
 pyyaml==6.0.1
