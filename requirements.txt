@@ -35,8 +35,11 @@ google-cloud-speech==2.21.0
 google-cloud-texttospeech>=2.15.0,<3.0
 google-generativeai>=0.3.0
 
-# ML Runtime (required by services)
-torch>=2.0.1
+# ML Runtime (CPU-only for Azure - no GPU available)
+# Use --index-url to force CPU version (smaller & faster)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.0.1
+torchaudio==2.0.2
 openai-whisper==20231117
 transformers==4.36.0
 numpy>=1.24,<2.0
