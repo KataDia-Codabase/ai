@@ -219,7 +219,6 @@ PublishSettings.xml
 
 # Railway/Deployment
 railway.json
-Procfile
 
 # Backup files
 *.bak

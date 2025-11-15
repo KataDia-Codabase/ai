@@ -40,6 +40,8 @@ jobs:
           path: |
             .
             !antenv/
+            !.git/
+            !.github/
 
       # 🚫 Opting Out of Oryx Build
       # If you prefer to disable the Oryx build process during deployment, follow these steps:
@@ -73,5 +75,5 @@ jobs:
         with:
           app-name: 'katadia-ml'
           slot-name: 'Production'
-          startup-command: 'gunicorn --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 wsgi:app'
+          startup-command: 'gunicorn --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 600 wsgi:app'
           
