@@ -24,28 +24,22 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Build once in GitHub Actions, then deploy pre-built venv to Azure
-      # This saves 10-15 minutes by skipping Azure Oryx rebuild
+      # Build in GitHub for validation, but let Azure rebuild to avoid conflicts
       - name: Create virtual environment and install dependencies
         run: |
           python -m venv antenv
           source antenv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
-          
-      # Create .skipPythonDeployment to tell Azure: "Don't rebuild, use my venv"
-      - name: Disable Azure rebuild (use pre-built venv)
-        run: |
-          touch .skipPythonDeployment
-          echo "Using pre-built venv from GitHub Actions" > .skipPythonDeployment
                 
-      # Include antenv in artifact (pre-built dependencies)
+      # Exclude venv from artifact - let Azure build it to avoid 409 conflicts
       - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
         with:
           name: python-app
           path: |
             .
+            !antenv/
             !.git/
             !.github/
             !datasets/
