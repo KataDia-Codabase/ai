@@ -29,9 +29,14 @@ cd katadia-ml
 
 # Create .env file
 echo "Creating environment variables..."
+echo "Please enter MySQL URI:"
+read MYSQL_URI_INPUT
+echo "Please enter Redis URL:"
+read REDIS_URL_INPUT
+
 cat > .env << EOF
-MYSQL_URI=mysql+pymysql://adminkatadia:123Hshi!@katadia-mysql.mysql.database.azure.com:3306/katadia_ml?charset=utf8mb4
-REDIS_URL=rediss://:xkIliDVZlX1ZNAWmDDu72S5mjLADYzqYrAzCaHyFJZs=@katadia-redis.redis.cache.windows.net:6380/0?ssl_cert_reqs=required
+MYSQL_URI=$MYSQL_URI_INPUT
+REDIS_URL=$REDIS_URL_INPUT
 DEBUG=False
 LOG_LEVEL=INFO
 EOF
