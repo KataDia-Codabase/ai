@@ -24,11 +24,13 @@ python-dotenv==1.0.0
 aiofiles==23.2.1
 structlog==23.2.0
 sentry-sdk[fastapi]==1.38.0
+jiwer==3.0.4
 
 # Audio processing
 soundfile==0.12.1
 pydub==0.25.1
 librosa==0.10.1
+praatio==5.1.0
 
 # Google Cloud APIs (for STT/TTS)
 google-cloud-speech==2.21.0
@@ -38,12 +40,20 @@ google-generativeai>=0.3.0
 # ML Runtime (CPU-only for Azure - no GPU available)
 # Use --index-url to force CPU version (smaller & faster)
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.0.1
-torchaudio==2.0.2
 openai-whisper==20231117
 transformers==4.36.0
 numpy>=1.24,<2.0
 scipy==1.11.4
+
+# PyTorch
+torch>=2.9.1
+torchaudio>=2.9.1
+
+# Transformers and audio processing
+transformers==4.36.0
+datasets>=2.14.0
+librosa==0.10.1
+pandas==2.1.3
 
 # Configuration
 pyyaml==6.0.1

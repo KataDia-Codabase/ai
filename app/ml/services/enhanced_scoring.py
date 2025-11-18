@@ -1,49 +1,86 @@
-"""
-Enhanced multi-dimensional scoring service for English pronunciation.
-Implements accuracy, fluency, prosody, and stress analysis.
-"""
+"""Enhanced multi-dimensional scoring service for English pronunciation."""
 
-import torch
-import numpy as np
-import librosa
-from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass
-from app.ml.services.stt_service import STTService
-from app.ml.services.scoring_service import ScoringResult, ErrorDetail
-from app.ml.models.wav2vec_trainer import EnglishPronunciationAnalyzer
-import structlog
+import asyncio
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import librosa
+import numpy as np
+import structlog
+import torch
+from jiwer import wer
+from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
+
+from app.core.config import settings
+from app.ml.services.audio_processing import AudioPreprocessor, ProcessedAudio
+from app.ml.services.error_detection import ErrorDetectionService, WordError
+from app.ml.services.phoneme_service import AlignmentResult
+from app.ml.services.scoring_service import ErrorDetail
+from app.ml.models.wav2vec_trainer import EnglishPronunciationAnalyzer
 
 logger = structlog.get_logger()
+
+LANGUAGE_MODEL_PATHS = {
+    "en-US": settings.WAV2VEC_ENGLISH_MODEL_PATH,
+}
+
+PHONEME_MAPS = {
+    "en-US": {
+        'a': 'ə', 'b': 'b', 'c': 'k', 'd': 'd', 'e': 'ɪ',
+        'f': 'f', 'g': 'g', 'h': 'h', 'i': 'ɪ', 'j': 'dʒ',
+        'k': 'k', 'l': 'l', 'm': 'm', 'n': 'n', 'o': 'əʊ',
+        'p': 'p', 'q': 'k', 'r': 'r', 's': 's', 't': 't',
+        'u': 'ʊ', 'v': 'v', 'w': 'w', 'x': 'ks', 'y': 'j', 'z': 'z'
+    },
+    "id-ID": {
+        'a': 'a', 'b': 'b', 'c': 'tʃ', 'd': 'd', 'e': 'e',
+        'f': 'f', 'g': 'g', 'h': 'h', 'i': 'i', 'j': 'dʒ',
+        'k': 'k', 'l': 'l', 'm': 'm', 'n': 'n', 'o': 'o',
+        'p': 'p', 'q': 'k', 'r': 'r', 's': 's', 't': 't',
+        'u': 'u', 'v': 'f', 'w': 'w', 'x': 'ks', 'y': 'j', 'z': 'z',
+        'ŋ': 'ŋ', 'ñ': 'ɲ'
+    }
+}
 
 @dataclass
 class FluencyFeatures:
     """Fluency analysis features."""
-    speech_rate: float            # words per minute
-    pause_duration: float         # average pause duration
-    speech_duration: float        # total speaking duration
-    pause_ratio: float           # pause_time / total_time
-    disfluency_count: int         # number of disfluencies
-    rhythm_regularity: float      # timing consistency score
+
+    speech_rate: float = 0.0            # words per minute
+    pause_duration: float = 0.0         # average pause duration
+    speech_duration: float = 0.0        # total speaking duration
+    pause_ratio: float = 0.0            # pause_time / total_time
+    disfluency_count: int = 0          # number of disfluencies
+    rhythm_regularity: float = 0.0     # timing consistency score
 
 @dataclass 
 class ProsodyFeatures:
     """Prosody analysis features."""
-    pitch_mean: float            # average pitch
-    pitch_std: float             # pitch variation
-    pitch_range: float           # overall pitch range
-    intonation_contour: List[float]  # pitch over time
-    energy_variation: float      # energy level changes
-    emphasis_score: float        # stress/emphasis accuracy
+    pitch_mean: float = 0.0
+    pitch_std: float = 0.0
+    pitch_range: float = 0.0
+    intonation_contour: List[float] = field(default_factory=list)
+    energy_variation: float = 0.0
+    emphasis_score: float = 0.0
 
 @dataclass
 class StressFeatures:
     """Word stress analysis features."""
-    stress_pattern_score: float   # stress accuracy score
-    primary_stress_placement: float
-    secondary_stress_placement: float
-    weak_form_pronunciation: float
-    syllable_timing: List[float]
+    stress_pattern_score: float = 0.0
+    primary_stress_placement: float = 0.0
+    secondary_stress_placement: float = 0.0
+    weak_form_pronunciation: float = 0.0
+    syllable_timing: List[float] = field(default_factory=list)
+
+    @property
+    def syllable_timings(self) -> List[float]:
+        """Backward-compatible alias used by newer helpers."""
+        return self.syllable_timing
+
+    @syllable_timings.setter
+    def syllable_timings(self, value: List[float]) -> None:
+        self.syllable_timing = value
 
 class EnhancedScoringService:
     """Enhanced multi-dimensional scoring for English pronunciation."""
@@ -51,17 +88,24 @@ class EnhancedScoringService:
     def __init__(self):
         self.sample_rate = 16000
         self.analyzer = EnglishPronunciationAnalyzer()
-        
-        # Model placeholders - would be loaded from trained models
-        self.fluency_model = None  # Load trained fluency model
-        self.prosody_model = None  # Load trained prosody model
-        self.stress_model = None   # Load trained stress model
+        self.audio_processor = AudioPreprocessor(target_sample_rate=self.sample_rate)
+        self.error_detector = ErrorDetectionService()
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.language_model_paths = LANGUAGE_MODEL_PATHS
+        self.accuracy_models: Dict[str, Wav2Vec2ForCTC] = {}
+        self.accuracy_processors: Dict[str, Wav2Vec2Processor] = {}
+        self._accuracy_ready: Dict[str, bool] = {}
+
+    def supports_language(self, language: str) -> bool:
+        """Return True if comprehensive scoring is available for language."""
+        return language in self.language_model_paths
     
     async def calculate_comprehensive_score(
         self,
         audio_path: str,
         transcript: str,
-        language: str = "en-US"
+        language: str = "en-US",
+        alignment: Optional[AlignmentResult] = None,
     ) -> Dict:
         """
         Calculate comprehensive pronunciation score across multiple dimensions.
@@ -75,53 +119,92 @@ class EnhancedScoringService:
             Comprehensive scoring results with all dimensions
         """
         try:
-            logger.info(f"Starting comprehensive scoring for {language}")
-            
-            # Load and preprocess audio
-            y, sr = librosa.load(audio_path, sr=self.sample_rate)
-            y = librosa.util.normalize(y)
-            
-            # Extract features
+            if language not in self.language_model_paths:
+                logger.warning("Enhanced scoring not available for language", language=language)
+                return await self._fallback_scoring(audio_path, transcript, language)
+
+            logger.info("Starting comprehensive scoring", language=language)
+
+            processed_audio = await self.audio_processor.process(audio_path)
+            y = processed_audio.waveform
+            sr = processed_audio.sample_rate
+
+            # Extract fluency/prosody/stress features from optimized audio.
             fluency_features = await self._extract_fluency_features(y, sr, transcript)
             prosody_features = await self._extract_prosody_features(y, sr)
             stress_features = await self._extract_stress_features(y, sr, transcript)
-            
-            # Calculate scores for each dimension
-            accuracy_score = await self._calculate_accuracy_score(audio_path, transcript)
-            fluency_score = await self._calculate_fluency_score(fluency_features)
-            prosody_score = await self._calculate_prosody_score(prosody_features)
-            stress_score = await self._calculate_stress_score(stress_features)
-            
-            # Combine scores with weights
+
+            accuracy_score, recognized_text, wer_score = await self._calculate_accuracy_score(
+                waveform=y,
+                transcript=transcript,
+                language=language,
+            )
+
+            fluency_score = self._calculate_fluency_score(fluency_features)
+            prosody_score = self._calculate_prosody_score(prosody_features)
+            stress_score = self._calculate_stress_score(stress_features)
+
             weights = {"accuracy": 0.4, "fluency": 0.2, "prosody": 0.2, "stress": 0.2}
             overall_score = (
-                accuracy_score * weights["accuracy"] +
-                fluency_score * weights["fluency"] +
-                prosody_score * weights["prosody"] +
-                stress_score * weights["stress"]
+                accuracy_score * weights["accuracy"]
+                + fluency_score * weights["fluency"]
+                + prosody_score * weights["prosody"]
+                + stress_score * weights["stress"]
             )
-            
-            # Generate detailed feedback
-            feedback = await self._generate_enhanced_feedback(
+
+            phonemes = [p.phoneme for p in alignment.phonemes] if alignment else None
+            expected_phonemes = self._approximate_phonemes(transcript, language)
+            actual_phonemes = self._approximate_phonemes(recognized_text, language)
+            detection = self.error_detector.analyze(
+                reference_text=transcript,
+                hypothesis_text=recognized_text,
+                expected_phonemes=expected_phonemes or phonemes,
+                actual_phonemes=actual_phonemes or phonemes,
+                language=language,
+            )
+            error_details = [
+                ErrorDetail(
+                    type=err.type,
+                    expected=err.expected,
+                    actual=err.actual,
+                    position=err.position,
+                    confidence=err.confidence,
+                )
+                for err in detection.word_errors
+            ]
+
+            confidence = max(0.0, min(1.0, 1.0 - wer_score))
+            feedback = self._generate_enhanced_feedback(
                 fluency_features, prosody_features, stress_features
             )
-            
+
             return {
                 "overall_score": overall_score,
                 "dimensions": {
                     "accuracy": accuracy_score,
                     "fluency": fluency_score,
                     "prosody": prosody_score,
-                    "stress": stress_score
+                    "stress": stress_score,
                 },
                 "features": {
                     "fluency": fluency_features,
                     "prosody": prosody_features,
-                    "stress": stress_features
+                    "stress": stress_features,
                 },
                 "feedback": feedback,
                 "language": language,
-                "analysis_level": "comprehensive"
+                "analysis_level": "comprehensive",
+                "errors": error_details,
+                "confidence": confidence,
+                "recognized_transcript": recognized_text,
+                "wer": wer_score,
+                "audio_profile": {
+                    "duration": processed_audio.duration,
+                    "sample_rate": processed_audio.sample_rate,
+                    "processing": processed_audio.metadata,
+                },
+                "error_summary": detection.summary,
+                "phoneme_insights": detection.phoneme_insights,
             }
             
         except Exception as e:
@@ -283,30 +366,141 @@ class EnhancedScoringService:
     def _calculate_emphasis_score(self, energy: np.ndarray) -> float:
         """Calculate emphasis score based on energy peaks."""
         try:
-            # Find significant energy peaks
-            energy_smooth = np.convolve(energy, np.ones(10)/10, mode='same')
-            peaks = []
-            
-            for i in range(1, len(energy_smooth) - 1):
-                if (energy_smooth[i] > energy_smooth[i-1] and 
-                    energy_smooth[i] > energy_smooth[i+1] and
-                    energy_smooth[i] > np.mean(energy_smooth) + np.std(energy_smooth)):
-                    peaks.append(i)
-            
-            # Emphasis score based on frequency and prominence of peaks
-            emphasis_score = min(len(peaks) / (len(energy) / 100), 1.0)  # Normalize
-            return float(emphasis_score)
+            if len(energy) < 3:
+                return 0.0
+
+            # Smooth to reduce spurious spikes but keep short utterance traits
+            window = min(10, max(3, len(energy) // 5))
+            kernel = np.ones(window) / window
+            energy_smooth = np.convolve(energy, kernel, mode='same')
+
+            mean_energy = np.mean(energy_smooth)
+            std_energy = np.std(energy_smooth) + 1e-6
+            dynamic_range = np.max(energy_smooth) - np.min(energy_smooth)
+
+            peaks = [
+                i for i in range(1, len(energy_smooth) - 1)
+                if energy_smooth[i] > energy_smooth[i - 1]
+                and energy_smooth[i] > energy_smooth[i + 1]
+                and energy_smooth[i] > mean_energy + 0.5 * std_energy
+            ]
+
+            prominence = dynamic_range / (mean_energy + std_energy)
+            if prominence < 0.4:
+                return float(min(0.2, 0.5 * prominence))
+
+            if not peaks:
+                return float(min(0.15, 0.3 * prominence))
+
+            peak_density = len(peaks) / max(len(energy_smooth), 1)
+            emphasis_score = min(1.0, 0.5 * prominence + 1.2 * peak_density)
+            return float(max(0.0, emphasis_score))
             
         except Exception:
             return 0.0
     
-    async def _calculate_accuracy_score(self, audio_path: str, transcript: str) -> float:
-        """Calculate pronunciation accuracy using fine-tuned Wav2Vec2."""
-        # This would use the fine-tuned Wav2Vec2 model
-        # For now, return placeholder that will be implemented after training
-        return 75.0  # Placeholder
+    async def _calculate_accuracy_score(
+        self,
+        waveform: np.ndarray,
+        transcript: str,
+        language: str,
+    ) -> Tuple[float, str, float]:
+        """Calculate pronunciation accuracy using the fine-tuned Wav2Vec2 model."""
+
+        normalized_transcript = transcript.lower().strip()
+
+        if not self._load_accuracy_model(language):
+            logger.warning(
+                "Wav2Vec2 model not available; using heuristic accuracy",
+                language=language,
+            )
+            return 72.0, normalized_transcript, 0.28
+
+        processor = self.accuracy_processors.get(language)
+        model = self.accuracy_models.get(language)
+
+        async def _infer_text() -> str:
+            def _run() -> str:
+                inputs = processor(
+                    waveform,
+                    sampling_rate=self.sample_rate,
+                    return_tensors="pt",
+                    padding=True,
+                )
+                input_values = inputs.input_values.to(self.device)
+                attention_mask = (
+                    inputs.attention_mask.to(self.device)
+                    if hasattr(inputs, "attention_mask")
+                    else None
+                )
+
+                with torch.no_grad():
+                    logits = model(
+                        input_values,
+                        attention_mask=attention_mask,
+                    ).logits
+
+                predicted_ids = torch.argmax(logits, dim=-1)
+                text = processor.batch_decode(predicted_ids)[0]
+                return text.strip().lower()
+
+            return await asyncio.to_thread(_run)
+
+        recognized_text = await _infer_text()
+
+        if not normalized_transcript:
+            return 50.0, recognized_text, 1.0
+
+        wer_score = wer(normalized_transcript, recognized_text)
+        wer_score = float(max(0.0, min(1.0, wer_score)))
+        accuracy_score = max(0.0, min(100.0, 100.0 * (1.0 - wer_score)))
+
+        return accuracy_score, recognized_text, wer_score
+
+    def _load_accuracy_model(self, language: str) -> bool:
+        if self._accuracy_ready.get(language):
+            return True
+
+        model_path_str = self.language_model_paths.get(language)
+        if not model_path_str:
+            logger.warning("No model path configured for language", language=language)
+            self._accuracy_ready[language] = False
+            return False
+
+        model_path = Path(model_path_str)
+        if not model_path.exists():
+            logger.warning(
+                "Fine-tuned model not found for language",
+                language=language,
+                path=str(model_path),
+            )
+            self._accuracy_ready[language] = False
+            return False
+
+        try:
+            processor = Wav2Vec2Processor.from_pretrained(model_path)
+            model = Wav2Vec2ForCTC.from_pretrained(model_path)
+            model.to(self.device)
+            model.eval()
+            self.accuracy_processors[language] = processor
+            self.accuracy_models[language] = model
+            self._accuracy_ready[language] = True
+            logger.info(
+                "Loaded fine-tuned Wav2Vec2 model",
+                language=language,
+                path=str(model_path),
+            )
+            return True
+        except Exception as exc:
+            logger.error(
+                "Failed to load Wav2Vec2 model",
+                language=language,
+                error=str(exc),
+            )
+            self._accuracy_ready[language] = False
+            return False
     
-    async def _calculate_fluency_score(self, features: FluencyFeatures) -> float:
+    def _calculate_fluency_score(self, features: FluencyFeatures) -> float:
         """Calculate fluency score from features."""
         score = 50.0  # Base score
         
@@ -332,7 +526,7 @@ class EnhancedScoringService:
         
         return max(0, min(100, score))
     
-    async def _calculate_prosody_score(self, features: ProsodyFeatures) -> float:
+    def _calculate_prosody_score(self, features: ProsodyFeatures) -> float:
         """Calculate prosody score from features."""
         score = 50.0  # Base score
         
@@ -356,7 +550,7 @@ class EnhancedScoringService:
         
         return max(0, min(100, score))
     
-    async def _calculate_stress_score(self, features: StressFeatures) -> float:
+    def _calculate_stress_score(self, features: StressFeatures) -> float:
         """Calculate stress placement score."""
         score = features.stress_pattern_score * 80  # Base on pattern accuracy
         
@@ -365,15 +559,15 @@ class EnhancedScoringService:
             score += 10
         
         # Regular syllable timing bonus
-        if len(features.syllable_timing) > 1:
-            timing_std = np.std(features.syllable_timing)
-            timing_mean = np.mean(features.syllable_timing)
+        if len(features.syllable_timings) > 1:
+            timing_std = np.std(features.syllable_timings)
+            timing_mean = np.mean(features.syllable_timings)
             if timing_std / timing_mean < 0.3:
                 score += 10
         
         return max(0, min(100, score))
     
-    async def _generate_enhanced_feedback(
+    def _generate_enhanced_feedback(
         self, 
         fluency: FluencyFeatures, 
         prosody: ProsodyFeatures, 
@@ -402,10 +596,12 @@ class EnhancedScoringService:
         # Fluency feedback
         if fluency.speech_rate < 120:
             feedback["fluency"]["specific_areas"].append("Speech rate too slow")
-            feedback["fluency"]["recommendations"].append("Try to speak at 150-180 words per minute")
+            feedback["fluency"]["recommendations"].append(
+                "Your speech rate is slow; try to speak at 150-180 words per minute"
+            )
         elif fluency.speech_rate > 200:
             feedback["fluency"]["specific_areas"].append("Speech rate too fast")
-            feedback["fluency"]["recommendations"].append("Slow down to improve clarity")
+            feedback["fluency"]["recommendations"].append("Speech feels too fast; slow down to improve clarity")
         
         if fluency.pause_ratio > 0.4:
             feedback["fluency"]["specific_areas"].append("Too many pauses")
@@ -430,6 +626,15 @@ class EnhancedScoringService:
         
         return feedback
     
+    def _approximate_phonemes(self, text: str, language: str) -> List[str]:
+        """Create a lightweight phoneme approximation for error analysis."""
+        mapping = PHONEME_MAPS.get(language, PHONEME_MAPS["en-US"])
+        phonemes: List[str] = []
+        for char in text.lower():
+            if char.isalpha() or char in ("ŋ", "ñ"):
+                phonemes.append(mapping.get(char, char))
+        return phonemes
+
     async def _fallback_scoring(self, audio_path: str, transcript: str, language: str) -> Dict:
         """Fallback scoring if comprehensive analysis fails."""
         logger.warning("Using fallback scoring due to analysis failure")
@@ -444,5 +649,11 @@ class EnhancedScoringService:
             "features": {},
             "feedback": "Scoring analysis encountered issues. Please try again.",
             "language": language,
-            "analysis_level": "fallback"
+            "analysis_level": "fallback",
+            "errors": [],
+            "confidence": 0.5,
+            "recognized_transcript": transcript.lower().strip(),
+            "wer": 0.4,
+            "audio_profile": None,
+            "error_summary": {"total": 0, "substitution": 0, "deletion": 0, "insertion": 0},
         }

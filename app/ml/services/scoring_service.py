@@ -1,9 +1,7 @@
 import numpy as np
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-from app.ml.services.phoneme_service import PhonemeResult, AlignmentResult
 import structlog
-import asyncio
 
 logger = structlog.get_logger()
 
@@ -79,7 +77,7 @@ class ScoringService:
                     break
                 
                 # Calculate GOP score for this phoneme
-                gop_score = await self._calculate_phoneme_gop(
+                gop_score = self._calculate_phoneme_gop(
                     exp_phone, act_phone, confidence_scores[i]
                 )
                 phoneme_scores.append(gop_score)
@@ -96,8 +94,8 @@ class ScoringService:
             errors.extend(alignment_errors)
             
             # Calculate overall and dimension scores
-            overall_score = await self._calculate_overall_score(phoneme_scores, errors)
-            dimension_scores = await self._calculate_dimension_scores(
+            overall_score = self._calculate_overall_score(phoneme_scores, errors)
+            dimension_scores = self._calculate_dimension_scores(
                 phoneme_scores, errors, expected_phonemes
             )
             
@@ -128,7 +126,7 @@ class ScoringService:
                 details={}
             )
     
-    async def _calculate_phoneme_gop(
+    def _calculate_phoneme_gop(
         self, 
         expected: str, 
         actual: str, 
@@ -137,7 +135,7 @@ class ScoringService:
         """Calculate GOP score for individual phoneme."""
         if expected == actual:
             # Perfect match
-            return 100.0 * confidence
+            return 100.0
         else:
             # Mismatch - calculate similarity score
             similarity = self._calculate_phoneme_similarity(expected, actual)
@@ -230,7 +228,7 @@ class ScoringService:
         
         return errors
     
-    async def _calculate_overall_score(
+    def _calculate_overall_score(
         self, 
         phoneme_scores: List[float], 
         errors: List[ErrorDetail]
@@ -249,7 +247,7 @@ class ScoringService:
         final_score = base_score - min(error_penalty, max_penalty)
         return max(0.0, min(100.0, final_score))
     
-    async def _calculate_dimension_scores(
+    def _calculate_dimension_scores(
         self, 
         phoneme_scores: List[float], 
         errors: List[ErrorDetail], 

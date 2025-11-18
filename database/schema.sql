@@ -198,12 +198,13 @@ GROUP BY u.user_id, u.username, u.cefr_level;
 -- Daily activity summary view
 CREATE OR REPLACE VIEW daily_activity AS
 SELECT 
-    DATE(created_at) as activity_date,
-    COUNT(DISTINCT user_id) as active_users,
+    DATE(ps.created_at) as activity_date,
+    COUNT(DISTINCT ar.user_id) as active_users,
     COUNT(*) as total_recordings,
-    AVG(overall_score) as avg_score
-FROM pronunciation_scores
-GROUP BY DATE(created_at)
+    AVG(ps.overall_score) as avg_score
+FROM pronunciation_scores ps
+LEFT JOIN audio_recordings ar ON ps.recording_id = ar.recording_id
+GROUP BY DATE(ps.created_at)
 ORDER BY activity_date DESC;
 
 -- Insert sample data for testing

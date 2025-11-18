@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     
     # Model Settings
     WAV2VEC_MODEL_PATH: str = "./models/wav2vec2-indonesian"
+    WAV2VEC_ENGLISH_MODEL_PATH: str = "./models/wav2vec2-english"
     MFA_MODEL_PATH: str = "./models/mfa"
     WHISPER_MODEL_SIZE: str = "base"
     

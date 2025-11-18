@@ -6,7 +6,7 @@ AI/ML microservice for pronunciation analysis and feedback in the KataDia AI lan
 
 - **Speech-to-Text**: Google Cloud STT with Whisper fallback
 - **Phoneme Analysis**: Montreal Forced Aligner integration
-- **Pronunciation Scoring**: Multi-dimensional scoring (accuracy, fluency, prosody, stress)
+- **Pronunciation Scoring**: Multi-dimensional scoring (accuracy, fluency, prosody, stress) (currently tuned for English en-US)
 - **CEFR Assessment**: Automatic level placement (A1-C2)
 - **Personalized Feedback**: AI-powered feedback using GPT-4
 - **Adaptive Learning**: Difficulty adjustment based on performance
@@ -86,6 +86,42 @@ docker build -t katadia-ai-ml .
 docker run -p 8000:8000 katadia-ai-ml
 ```
 
+### Full Stack (FastAPI + MySQL + Redis)
+
+The production VM now hosts MySQL and Redis inside the same Compose stack to avoid external cloud fees. Use the provided `docker-compose.prod.yml` to run everything locally or on the VPS.
+
+```bash
+# Copy env template and set secrets (MySQL, Redis, API keys)
+cp .env.example .env
+
+# Start FastAPI, MySQL, Redis, schema migrator, and Nginx
+docker compose -f docker-compose.prod.yml up -d
+
+# Tail the one-shot schema migrator until it reports success
+docker compose -f docker-compose.prod.yml logs -f schema-migrator
+
+# Stream logs (optional)
+docker compose -f docker-compose.prod.yml logs -f fastapi
+
+# Stop the stack
+docker compose -f docker-compose.prod.yml down
+```
+
+Data is persisted through named volumes:
+
+| Service | Volume | Path |
+|---------|--------|------|
+| MySQL   | `mysql-data` | `/var/lib/mysql` |
+| Redis   | `redis-data` | `/data` |
+
+FastAPI reaches the internal DB/cache via hostnames `mysql` and `redis` on the shared `katadia-network` bridge.
+
+The `schema-migrator` service waits for MySQL to accept connections and replays `database/schema.sql` on every deployment, ensuring migrations stay in sync without manual intervention.
+
+### HTTPS Termination (Cloudflare)
+
+Public traffic is served through Cloudflare, which terminates TLS at the edge. Keep the VM's Nginx listener on HTTP (port 80) only; Cloudflare forwards traffic over HTTP while presenting its managed certificate to end users. If you ever bypass Cloudflare (orange-cloud off), reintroduce a certificate on the VM before exposing port 443.
+
 ## API Documentation
 
 Visit `http://localhost:8000/docs` for interactive API documentation.
@@ -127,6 +163,9 @@ huggingface-cli download openai/whisper-large-v2
 Download pretrained model:
 ```bash
 huggingface-cli download facebook/wav2vec2-large-xlsr-53
+
+# Fine-tuned English checkpoint (place files under ./models/wav2vec2-english)
+huggingface-cli download <organization>/<english-model-id> -d models/wav2vec2-english
 ```
 
 ## Development Workflow
@@ -194,19 +233,22 @@ Key environment variables:
 GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json
 GOOGLE_CLOUD_PROJECT=your-project-id
 
-# Database
-MYSQL_HOST=localhost
+# Database (Docker Compose defaults)
+MYSQL_HOST=mysql
 MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=password
+MYSQL_USER=katadia
+MYSQL_PASSWORD=katadia_password
 MYSQL_DATABASE=katadia_ml
-REDIS_URL=redis://localhost:6379
+MYSQL_ROOT_PASSWORD=rootpassword
+MYSQL_URI=mysql+pymysql://katadia:katadia_password@mysql:3306/katadia_ml
+REDIS_URL=redis://redis:6379/0
 
 # OpenAI
 OPENAI_API_KEY=your-openai-api-key
 
 # Models
 WAV2VEC_MODEL_PATH=./models/wav2vec2-indonesian
+WAV2VEC_ENGLISH_MODEL_PATH=./models/wav2vec2-english
 WHISPER_MODEL_SIZE=base
 ```
 
@@ -223,6 +265,40 @@ Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
 Health checks available at:
 - `/api/v1/health` - Basic status
 - `/api/v1/health/detailed` - Component status (Phase 1+)
+
+## Data Backup & Restore
+
+Both stateful services run inside Docker with named volumes. Create regular dumps so the VPS disk can be rebuilt safely.
+
+### MySQL (`mysql-data`)
+
+```bash
+# Ad-hoc backup
+docker exec katadia-mysql mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" --databases katadia_ml \
+   > backups/katadia_ml-$(date +%F).sql
+
+# Or reuse the helper script (also scheduled nightly on the VPS)
+./scripts/backup_data.sh
+
+# Restore
+docker exec -i katadia-mysql mysql -u root -p"$MYSQL_ROOT_PASSWORD" < backups/katadia_ml-YYYY-MM-DD.sql
+```
+
+Schedule this via cron on the VM and sync the `backups/` folder to blob/object storage if possible.
+
+### Redis (`redis-data`)
+
+Redis writes an append-only file inside `/data`. Take periodic snapshots before maintenance:
+
+```bash
+# Trigger snapshot
+docker exec katadia-redis redis-cli save
+
+# Copy rdb/aof off the server
+docker cp katadia-redis:/data .
+```
+
+For point-in-time recovery, keep multiple copies of the `/data` directory or enable `redis-cli --rdb` streaming to external storage.
 
 ## Troubleshooting
 

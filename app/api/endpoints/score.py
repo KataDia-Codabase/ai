@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any
 from app.core.logging import get_logger
 from app.ml.services.stt_service import STTService
 from app.ml.services.phoneme_service import PhonemeService
-from app.ml.services.scoring_service import ScoringService
+from app.ml.services.scoring_service import ScoringService, ScoringResult
 from app.ml.services.enhanced_scoring import EnhancedScoringService
 from app.ml.services.gemini_feedback import GeminiFeedbackService
 from app.ml.services.cefr_assessment import EnglishCEFRAssessment, CEFRAssessmentResult
@@ -31,6 +31,8 @@ class ScoreRequest(BaseModel):
     language: str  # id-ID or en-US
     user_id: str
     session_id: str
+    audio_url: Optional[str] = None  # Provided by mobile backend
+    lesson_vocab_id: Optional[int] = None
 
 class ErrorDetail(BaseModel):
     type: str  # substitution, deletion, insertion
@@ -49,6 +51,12 @@ class ScoreResponse(BaseModel):
     processing_time: Optional[float] = None
     analysis_level: Optional[str] = None  # basic, comprehensive
     features: Optional[Dict] = None  # Detailed feature analysis
+    generated_transcript: Optional[str] = None
+    error_summary: Optional[Dict[str, Any]] = None
+    phoneme_insights: Optional[Dict[str, Any]] = None
+    audio_url: Optional[str] = None
+    lesson_vocab_id: Optional[int] = None
+    user_id: Optional[str] = None
 
 @router.post("/score", response_model=ScoreResponse)
 async def score_pronunciation(
@@ -56,6 +64,8 @@ async def score_pronunciation(
     language: str = Body(...),
     user_id: str = Body(...),
     session_id: str = Body(...),
+    audio_url: Optional[str] = Body(None),
+    lesson_vocab_id: Optional[int] = Body(None),
     audio_file: UploadFile = File(...)
 ):
     """
@@ -117,53 +127,50 @@ async def score_pronunciation(
             audio_path, transcript, language
         )
         
-        # Step 3: Calculate pronunciation score using enhanced scoring
-        if language == "en-US":
-            # Use enhanced scoring for English
+        # Step 3: Calculate pronunciation score using enhanced scoring when available
+        use_enhanced = enhanced_scoring.supports_language(language)
+        comprehensive_result = None
+        gemini_feedback_result = None
+        cefr_result = None
+
+        if use_enhanced:
             comprehensive_result = await enhanced_scoring.calculate_comprehensive_score(
                 audio_path=audio_path,
                 transcript=transcript,
-                language=language
+                language=language,
+                alignment=alignment_result
             )
-            
-            # Extract results for response format
-            scoring_result = type('obj', (object,), {
-                'overall_score': comprehensive_result['overall_score'],
-                'dimensions': comprehensive_result['dimensions'],
-                'errors': [],  # Would be populated from detailed analysis
-                'confidence': 0.85,
-                'details': {
-                    'features': comprehensive_result.get('features'),
-                    'feedback': comprehensive_result.get('feedback')
-                }
-            })()
-            
-            # Generate Gemini feedback
-            gemini_feedback_result = await gemini_feedback.generate_feedback(
-                comprehensive_result=comprehensive_result,
-                language=language
+
+            scoring_result = ScoringResult(
+                overall_score=comprehensive_result["overall_score"],
+                dimensions=comprehensive_result["dimensions"],
+                errors=comprehensive_result.get("errors", []),
+                confidence=comprehensive_result.get("confidence", 0.0),
+                details={
+                    "features": comprehensive_result.get("features"),
+                    "feedback": comprehensive_result.get("feedback"),
+                    "recognized_transcript": comprehensive_result.get("recognized_transcript"),
+                    "audio_profile": comprehensive_result.get("audio_profile"),
+                    "error_summary": comprehensive_result.get("error_summary"),
+                    "phoneme_insights": comprehensive_result.get("phoneme_insights"),
+                },
             )
-            
-            # Perform CEFR assessment for English
+
             if language == "en-US":
+                gemini_feedback_result = await gemini_feedback.generate_feedback(
+                    comprehensive_result=comprehensive_result,
+                    language=language
+                )
                 cefr_result = await cefr_assessment.assess_cefr_level(
                     comprehensive_score=comprehensive_result
                 )
-            else:
-                cefr_result = None
-            
         else:
-            # Use basic scoring for other languages
             expected_phonemes = [p.phoneme for p in alignment_result.phonemes]
-            actual_phonemes = [p.phoneme for p in alignment_result.phonemes]  # Will be enhanced
-            
+            actual_phonemes = [p.phoneme for p in alignment_result.phonemes]
+
             scoring_result = await scoring_service.calculate_gop_score(
                 expected_phonemes, actual_phonemes
             )
-            
-            comprehensive_result = None
-            gemini_feedback_result = None
-            cefr_result = None
         
         # Step 4: Convert to response format
         response_errors = []
@@ -185,6 +192,21 @@ async def score_pronunciation(
         if comprehensive_result:
             # Extract CEFR level if available
             cefr_level = cefr_result.cefr_level.value if cefr_result else None
+            base_features = comprehensive_result.get('features') or {}
+            extended_features = {
+                **base_features,
+                'audio_profile': comprehensive_result.get('audio_profile'),
+                'error_summary': comprehensive_result.get('error_summary'),
+                'recognized_transcript': comprehensive_result.get('recognized_transcript'),
+                'phoneme_insights': comprehensive_result.get('phoneme_insights')
+            }
+            if cefr_result:
+                extended_features['cefr_assessment'] = {
+                    'level': cefr_level,
+                    'confidence': cefr_result.confidence,
+                    'strengths': cefr_result.strengths,
+                    'weaknesses': cefr_result.weaknesses
+                }
             
             result_response = ScoreResponse(
                 overall_score=scoring_result.overall_score,
@@ -194,15 +216,13 @@ async def score_pronunciation(
                 feedback=gemini_feedback_result.get('feedback') if gemini_feedback_result else None,
                 processing_time=processing_time,
                 analysis_level=comprehensive_result.get('analysis_level'),
-                features={
-                    **comprehensive_result.get('features', {}),
-                    'cefr_assessment': {
-                        'level': cefr_level,
-                        'confidence': cefr_result.confidence if cefr_result else 0,
-                        'strengths': cefr_result.strengths if cefr_result else [],
-                        'weaknesses': cefr_result.weaknesses if cefr_result else []
-                    }
-                } if cefr_result else comprehensive_result.get('features')
+                features=extended_features,
+                generated_transcript=comprehensive_result.get('recognized_transcript'),
+                error_summary=comprehensive_result.get('error_summary'),
+                phoneme_insights=comprehensive_result.get('phoneme_insights'),
+                audio_url=audio_url,
+                lesson_vocab_id=lesson_vocab_id,
+                user_id=user_id
             )
         else:
             result_response = ScoreResponse(
@@ -213,7 +233,13 @@ async def score_pronunciation(
                 feedback=None,
                 processing_time=processing_time,
                 analysis_level="basic",
-                features=None
+                features=None,
+                generated_transcript=transcript,
+                error_summary=None,
+                phoneme_insights=None,
+                audio_url=audio_url,
+                lesson_vocab_id=lesson_vocab_id,
+                user_id=user_id
             )
         
         # Step 5: Cleanup temporary file

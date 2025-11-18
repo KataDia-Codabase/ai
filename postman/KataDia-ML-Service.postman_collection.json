@@ -1,0 +1,163 @@
+{
+  "info": {
+    "name": "KataDia ML Service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "9b3a3f08-5f8d-4c84-9a41-6e7efd0c2d5a",
+    "description": "Collection to test the KataDia pronunciation scoring service (health, transcription, scoring, feedback)."
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "health"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Transcribe Audio",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "language",
+              "value": "en-US",
+              "type": "text"
+            },
+            {
+              "key": "audio_file",
+              "type": "file",
+              "src": "{{audioFilePath}}"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/transcribe",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "transcribe"
+          ]
+        },
+        "description": "Uploads an audio file and retrieves the raw transcript (Google STT or Whisper fallback)."
+      },
+      "response": []
+    },
+    {
+      "name": "Score Pronunciation",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "transcript",
+              "value": "We call it bear.",
+              "type": "text"
+            },
+            {
+              "key": "language",
+              "value": "en-US",
+              "type": "text"
+            },
+            {
+              "key": "user_id",
+              "value": "demo-user",
+              "type": "text"
+            },
+            {
+              "key": "session_id",
+              "value": "demo-session",
+              "type": "text"
+            },
+            {
+              "key": "audio_url",
+              "value": "https://mobile-app.local/uploads/demo-user/dataset_sample.wav",
+              "type": "text"
+            },
+            {
+              "key": "lesson_vocab_id",
+              "value": "42",
+              "type": "text"
+            },
+            {
+              "key": "audio_file",
+              "type": "file",
+              "src": "{{audioFilePath}}"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/score",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "score"
+          ]
+        },
+        "description": "Runs the enhanced multi-dimensional scoring pipeline and returns scores, CEFR, and metadata mapped to the backend schema."
+      },
+      "response": []
+    },
+    {
+      "name": "Generate Feedback",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pronunciation_data\": {\n    \"overall_score\": 75,\n    \"dimensions\": {\n      \"accuracy\": 72,\n      \"fluency\": 60,\n      \"prosody\": 75,\n      \"stress\": 96\n    },\n    \"errors\": [],\n    \"cefr_level\": \"B1\"\n  },\n  \"user_id\": \"demo-user\",\n  \"language\": \"en-US\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/feedback",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "feedback"
+          ]
+        },
+        "description": "Obtains placeholder AI feedback given the scoring output (to be replaced with Gemini-driven prompts later)."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "audioFilePath",
+      "value": "temp_audio/dataset_sample.wav"
+    }
+  ]
+}

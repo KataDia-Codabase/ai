@@ -1,16 +1,69 @@
-version: '3.8'
-
 services:
   fastapi:
-    image: hshinosa/ml-service:latest  # Will be pulled from Docker Hub
+    build: .  # Build locally di VPS
     container_name: katadia-ml
     restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
     ports:
       - "8000:8000"
     env_file:
       - .env
     volumes:
       - ./models:/app/models
+      - ./google-credentials.json:/app/google-credentials.json:ro
+    networks:
+      - katadia-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: katadia-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-katadia_ml}
+      MYSQL_USER: ${MYSQL_USER:-katadia}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-katadia_password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - katadia-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: katadia-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - katadia-network
+
+  schema-migrator:
+    image: mysql:8.0
+    container_name: katadia-schema-migrator
+    restart: "no"
+    command: >
+      bash -c "
+        set -euo pipefail
+        until mysql -h mysql -u root -p\"$MYSQL_ROOT_PASSWORD\" -e 'SELECT 1' >/dev/null 2>&1; do
+          echo 'Waiting for MySQL to accept connections...';
+          sleep 3;
+        done;
+        mysql -h mysql -u root -p\"$MYSQL_ROOT_PASSWORD\" $MYSQL_DATABASE < /schema/schema.sql;
+        echo 'Schema applied successfully.'
+      "
+    volumes:
+      - ./database/schema.sql:/schema/schema.sql:ro
+    env_file:
+      - .env
+    depends_on:
+      - mysql
     networks:
       - katadia-network
 
@@ -30,3 +83,7 @@ services:
 networks:
   katadia-network:
     driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:
