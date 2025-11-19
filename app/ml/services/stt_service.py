@@ -25,9 +25,32 @@ class STTService:
             # Initialize Google Cloud STT
             if settings.GOOGLE_APPLICATION_CREDENTIALS:
                 import os
-                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = settings.GOOGLE_APPLICATION_CREDENTIALS
-                self.speech_client = speech.SpeechClient()
-                logger.info("Google Cloud STT client initialized")
+                from pathlib import Path
+                
+                creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
+                
+                # Handle relative paths - resolve relative to app root
+                if not os.path.isabs(creds_path):
+                    # Try multiple possible locations
+                    possible_paths = [
+                        os.path.join(os.getcwd(), creds_path),  # From CWD
+                        os.path.join("/app", creds_path),  # From /app in container
+                        os.path.join(Path(__file__).resolve().parents[2], creds_path),  # From app root
+                    ]
+                    
+                    for test_path in possible_paths:
+                        if os.path.exists(test_path):
+                            creds_path = test_path
+                            break
+                
+                if os.path.exists(creds_path):
+                    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = creds_path
+                    self.speech_client = speech.SpeechClient()
+                    logger.info("Google Cloud STT client initialized", credentials_path=creds_path)
+                else:
+                    logger.warning("Google Cloud credentials file not found at:", 
+                                 credentials_path=creds_path, 
+                                 cwd=os.getcwd())
             else:
                 logger.warning("Google Cloud credentials not provided, using Whisper only")
                 
@@ -168,37 +191,32 @@ class STTService:
             
             # Run transcription in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None, 
-                self.whisper_model.transcribe,
-                audio_path,
-                whisper_lang,
-                False  # without timestamps initially
-            )
+            
+            def _run_transcribe():
+                """Wrapper to call whisper with keyword arguments."""
+                return self.whisper_model.transcribe(
+                    audio_path,
+                    language=whisper_lang,
+                    word_level_detail="word" if use_word_timestamps else "segment"
+                )
+            
+            result = await loop.run_in_executor(None, _run_transcribe)
             
             transcript = result["text"].strip()
             
             # Extract word timestamps if needed
             word_timestamps = None
-            if use_word_timestamps:
-                # Run transcription with timestamps
-                result_with_timestamps = await loop.run_in_executor(
-                    None,
-                    self.whisper_model.transcribe,
-                    audio_path,
-                    whisper_lang,
-                    True  # with timestamps
-                )
-                
+            if use_word_timestamps and "segments" in result:
                 word_timestamps = []
-                for segment in result_with_timestamps.get("segments", []):
-                    for word, timing in segment.get("words", []):
-                        word_timestamps.append({
-                            "word": word,
-                            "start_time": timing["start"],
-                            "end_time": timing["end"], 
-                            "confidence": timing.get("probability", 0.95)
-                        })
+                for segment in result.get("segments", []):
+                    if "words" in segment:
+                        for word_info in segment["words"]:
+                            word_timestamps.append({
+                                "word": word_info.get("word", ""),
+                                "start_time": word_info.get("start", 0),
+                                "end_time": word_info.get("end", 0), 
+                                "confidence": word_info.get("probability", 0.95)
+                            })
             
             # Whisper doesn't provide overall confidence, use average of word confidences
             avg_confidence = 0.95  # Default confidence for Whisper
