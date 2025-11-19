@@ -1,0 +1,471 @@
+{
+  "info": {
+    "name": "KataDia AI-ML Service - Complete API",
+    "description": "Comprehensive API collection for KataDia AI-ML microservice with all endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "2.0.0"
+  },
+  "item": [
+    {
+      "name": "Health & Status",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "health"]
+            }
+          }
+        },
+        {
+          "name": "Model Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health/models",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "health", "models"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transcription",
+      "item": [
+        {
+          "name": "Transcribe Audio",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "language",
+                  "value": "en-US",
+                  "type": "text"
+                },
+                {
+                  "key": "audio_file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/transcribe",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "transcribe"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Scoring & Pronunciation",
+      "item": [
+        {
+          "name": "Score Pronunciation",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "transcript",
+                  "value": "we call it bear",
+                  "type": "text"
+                },
+                {
+                  "key": "language",
+                  "value": "en-US",
+                  "type": "text"
+                },
+                {
+                  "key": "user_id",
+                  "value": "user_001",
+                  "type": "text"
+                },
+                {
+                  "key": "session_id",
+                  "value": "session_001",
+                  "type": "text"
+                },
+                {
+                  "key": "audio_file",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "audio_url",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "lesson_vocab_id",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/score",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "score"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feedback",
+      "item": [
+        {
+          "name": "Generate Feedback",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user_001\",\n  \"language\": \"en-US\",\n  \"pronunciation_data\": {\n    \"overall_score\": 75.5,\n    \"dimensions\": {\n      \"accuracy\": 80,\n      \"fluency\": 70,\n      \"prosody\": 75,\n      \"stress\": 96\n    },\n    \"errors\": [\n      {\n        \"type\": \"substitution\",\n        \"expected\": \"call\",\n        \"actual\": \"could\",\n        \"position\": 1,\n        \"confidence\": 0.6\n      }\n    ],\n    \"cefr_level\": \"B1\"\n  },\n  \"session_history\": []\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/feedback",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "feedback"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cache Management",
+      "item": [
+        {
+          "name": "Cache Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/cache/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "cache", "health"]
+            }
+          }
+        },
+        {
+          "name": "Cache Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/cache/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "cache", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Invalidate User Cache",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/cache/invalidate?user_id=user_001",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "cache", "invalidate"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "user_001"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Clear All Cache",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/cache/clear",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "cache", "clear"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "Get User Analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/analytics/user/user_001",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "analytics", "user", "user_001"]
+            }
+          }
+        },
+        {
+          "name": "Get Session Analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/analytics/session/session_001",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "analytics", "session", "session_001"]
+            }
+          }
+        },
+        {
+          "name": "Get Global Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/analytics/statistics",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "analytics", "statistics"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "A/B Testing",
+      "item": [
+        {
+          "name": "Create Experiment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"experiment_name\": \"test_experiment_1\",\n  \"description\": \"Test experiment for pronunciation\",\n  \"variant_a\": \"enhanced_scoring\",\n  \"variant_b\": \"standard_scoring\",\n  \"traffic_split\": 50\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/experiments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "experiments"]
+            }
+          }
+        },
+        {
+          "name": "Get Experiment Results",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/experiments/test_experiment_1/results",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "experiments", "test_experiment_1", "results"]
+            }
+          }
+        },
+        {
+          "name": "List Experiments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/experiments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "experiments"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Model Optimization",
+      "item": [
+        {
+          "name": "Optimize Model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model_path\": \"./models/wav2vec2-english-finetuned\",\n  \"optimization_type\": \"comprehensive\",\n  \"quantization\": true,\n  \"onnx_conversion\": true,\n  \"pruning\": false,\n  \"distillation\": false,\n  \"profile_mode\": \"production\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/optimizer/optimize",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "optimizer", "optimize"]
+            }
+          }
+        },
+        {
+          "name": "Quantize Model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model_path\": \"./models/wav2vec2-english-finetuned\",\n  \"quantization_type\": \"int8\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/optimizer/quantize",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "optimizer", "quantize"]
+            }
+          }
+        },
+        {
+          "name": "Prune Model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model_path\": \"./models/wav2vec2-english-finetuned\",\n  \"pruning_type\": \"unstructured\",\n  \"pruning_amount\": 0.3\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/optimizer/prune",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "optimizer", "prune"]
+            }
+          }
+        },
+        {
+          "name": "Profile Model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model_path\": \"./models/wav2vec2-english-finetuned\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/optimizer/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "optimizer", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Analyze Latency",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model_path\": \"./models/wav2vec2-english-finetuned\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/optimizer/latency-analysis",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "optimizer", "latency-analysis"]
+            }
+          }
+        },
+        {
+          "name": "Compare Models",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/optimizer/compare/wav2vec2-english-finetuned",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "optimizer", "compare", "wav2vec2-english-finetuned"]
+            }
+          }
+        },
+        {
+          "name": "Get Optimization Profiles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/optimizer/profiles",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "optimizer", "profiles"]
+            }
+          }
+        },
+        {
+          "name": "Optimizer Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/optimizer/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "optimizer", "health"]
+            }
+          }
+        },
+        {
+          "name": "Get Available Models",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/optimizer/available-models",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "optimizer", "available-models"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ]
+}

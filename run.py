@@ -122,7 +122,7 @@ def create_directories():
 
 def run_service(host='127.0.0.1', port=8000, debug=False):
     """Run the FastAPI service."""
-    print(f"Starting English Pronunciation AI Service...")
+    print(f"Starting KataDia AI Service...")
     print(f"Service will be available at: http://{host}:{port}")
     print(f"API Docs: http://{host}:{port}/docs")
     print("")
@@ -192,7 +192,7 @@ def test_service(host='127.0.0.1', port=8000):
 
 def main():
     """Main function."""
-    parser = argparse.ArgumentParser(description='English Pronunciation AI Service')
+    parser = argparse.ArgumentParser(description='KataDia AI Service')
     parser.add_argument('--host', default='127.0.0.1', help='Host to bind to')
     parser.add_argument('--port', type=int, default=8000, help='Port to bind to')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
@@ -203,8 +203,7 @@ def main():
     args = parser.parse_args()
     
     print("=" * 60)
-    print("English Pronunciation AI Service")
-    print("AI-Powered English Pronunciation Analysis")
+    print("KataDia AI Service")
     print("=" * 60)
     print()
     
