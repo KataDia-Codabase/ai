@@ -1,10 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.api.endpoints import score, transcribe, feedback, health
 from app.core.logging import setup_logging
 import structlog
 import warnings
+import json
+from datetime import datetime
 
 # Suppress deprecation warnings from dependencies
 warnings.filterwarnings("ignore", category=UserWarning, module="praatio")
@@ -16,7 +20,18 @@ warnings.filterwarnings("ignore", message=".*_register_pytree_node.*")
 setup_logging()
 logger = structlog.get_logger()
 
-# Create FastAPI app
+# Custom JSON encoder for pretty printing
+class PrettyJSONResponse(JSONResponse):
+    def render(self, content):
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=2,
+            sort_keys=False,
+        ).encode("utf-8")
+
+# Create FastAPI app with custom JSON encoder
 app = FastAPI(
     title="KataDia AI - ML Service",
     description="AI/ML microservice for pronunciation analysis and feedback",
@@ -24,6 +39,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Override the default JSONResponse
+app.default_response_class = PrettyJSONResponse
 
 # Add CORS middleware
 app.add_middleware(

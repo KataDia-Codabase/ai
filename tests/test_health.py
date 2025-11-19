@@ -11,7 +11,7 @@ def test_health_check():
     
     data = response.json()
     assert data["status"] == "healthy"
-    assert data["service"] == "bahasaku-ai-ml"
+    assert data["service"] == "katadia-ai-ml"
     assert "version" in data
     
 def test_detailed_health_check():
@@ -36,5 +36,5 @@ def test_root_endpoint():
     assert response.status_code == 200
     
     data = response.json()
-    assert data["service"] == "BahasaKu AI - ML Service"
+    assert data["service"] == "KataDia AI - ML Service"
     assert data["status"] == "running"

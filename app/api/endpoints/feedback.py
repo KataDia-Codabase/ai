@@ -1,11 +1,14 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from app.core.logging import get_logger
 import structlog
 
+from app.ml.services.gemini_feedback import GeminiFeedbackService
+
 logger = get_logger()
 router = APIRouter()
+feedback_service = GeminiFeedbackService()
 
 class ErrorDetail(BaseModel):
     type: str
@@ -54,20 +57,44 @@ async def generate_feedback(request: FeedbackRequest):
             score=request.pronunciation_data.overall_score
         )
         
-        # Placeholder feedback - will be implemented in Sprint 3
-        placeholder_feedback = FeedbackResponse(
-            ai_feedback="Bagus! Anda sudah bisa mengucapkan kata dengan cukup jelas. Fokus pada huruf 't' yang terkadang terdengar seperti 'd'.",
-            specific_errors=request.pronunciation_data.errors,
-            improvement_suggestions=[
+        default_feedback = {
+            "overall_assessment": "Bagus! Anda sudah bisa mengucapkan kata dengan cukup jelas. Fokus pada huruf 't' yang terkadang terdengar seperti 'd'.",
+            "practice_suggestions": [
                 "Latih pengucapan huruf 't' dengan meletakkan ujung lidah di belakang gigi atas",
                 "Praktik dengan kata-kata yang mengandung huruf 't' seperti 'terima kasih'",
                 "Rekam suara Anda dan bandingkan dengan native speaker"
             ],
-            next_steps=[
+            "next_steps": [
                 "Lanjut ke pelajaran berikutnya tentang konsonan",
                 "Lakukan latihan pengucapan harian selama 15 menit",
                 "Coba praktik dengan kalimat yang lebih panjang"
             ]
+        }
+
+        comprehensive_payload: Dict[str, Any] = {
+            "overall_score": request.pronunciation_data.overall_score,
+            "dimensions": request.pronunciation_data.dimensions,
+            "errors": [error.dict() for error in request.pronunciation_data.errors],
+            "features": {},
+            "feedback": {}
+        }
+
+        feedback_details = await feedback_service.generate_feedback(
+            comprehensive_payload,
+            request.language,
+            {
+                "user_id": request.user_id,
+                "session_history": request.session_history
+            }
+        )
+
+        final_feedback = feedback_details or default_feedback
+
+        placeholder_feedback = FeedbackResponse(
+            ai_feedback=final_feedback.get("overall_assessment", default_feedback["overall_assessment"]),
+            specific_errors=request.pronunciation_data.errors,
+            improvement_suggestions=final_feedback.get("practice_suggestions", default_feedback["practice_suggestions"]),
+            next_steps=final_feedback.get("next_steps", default_feedback["next_steps"])
         )
         
         logger.info(

@@ -128,10 +128,28 @@ Visit `http://localhost:8000/docs` for interactive API documentation.
 
 ### Key Endpoints
 
-- `POST /api/v1/score` - Score pronunciation from audio
+- `POST /api/v1/score` - Score pronunciation from audio and return DB-ready payload
 - `POST /api/v1/transcribe` - Transcribe audio to text  
-- `POST /api/v1/feedback` - Generate personalized feedback
+- `POST /api/v1/feedback` - Generate personalized feedback (same engine used by `/score`)
 - `GET /api/v1/health` - Service health check
+
+#### `/api/v1/score` Response Snapshot
+
+The scoring endpoint now bundles all columns required by the `pronunciation_submissions` table:
+
+| Field | Source |
+|-------|--------|
+| `language_code` | Request `language` (currently `en-US` only) |
+| `overall_score`, `accuracy_score`, `fluency_score`, `prosody_score`, `stress_score` | Enhanced scoring engine |
+| `phoneme_errors_json` | Serialized phoneme-level mistakes |
+| `generated_transcript` | STT verification output |
+| `audio_url` | Uploaded audio reference (local `file://` or mobile URL) |
+| `cefr_level_assessment` | CEFR module result |
+| `personalized_feedback` & `feedback_details` | Gemini-driven (or template) feedback |
+| `lesson_vocab_id`, `user_id` | Request context |
+| `created_at` | Server-side UTC timestamp |
+
+Mobile/backend services can persist the response directly without calling a separate feedback endpoint, although `/api/v1/feedback` remains available for standalone use or historical comparisons.
 
 ## Model Downloads
 
@@ -251,6 +269,12 @@ WAV2VEC_MODEL_PATH=./models/wav2vec2-indonesian
 WAV2VEC_ENGLISH_MODEL_PATH=./models/wav2vec2-english
 WHISPER_MODEL_SIZE=base
 ```
+
+### Enhanced Scoring Notes
+
+- The `/api/v1/score` endpoint now always uses the enhanced English pipeline (Wav2Vec2 + fluency/prosody/stress analyzers). Requests must set `language=en-US`.
+- Uploaded scoring audio is stored under `temp_audio/scoring_uploads/` so the response can include a real local `audio_url` (e.g., `file:///.../temp_audio/scoring_uploads/xyz.wav`). Clean this folder periodically if disk usage grows.
+- When testing manually, send the same local path in the `audio_url` field (see the provided curl/Postman examples) so downstream services receive the actual file location used for scoring.
 
 ## Logging
 

@@ -97,26 +97,27 @@ class GeminiFeedbackService:
         dimensions = comprehensive_result.get('dimensions', {})
         features = comprehensive_result.get('features', {})
         
-        # Build prompt sections
+        # Build prompt sections - in Indonesian
         prompt_parts = [
-            f"Generate detailed pronunciation feedback for a {language} learner.",
+            f"Buatkan umpan balik pengucapan bahasa Inggris yang terperinci untuk seorang pelajar {language}.",
+            "Mohon berikan umpan balik dalam BAHASA INDONESIA.",
             "",
-            f"Overall Score: {overall_score}/100",
+            f"Skor Keseluruhan: {overall_score}/100",
             "",
-            "Dimensional Scores:",
-            f"- Accuracy: {dimensions.get('accuracy', 'N/A')}/100",
-            f"- Fluency: {dimensions.get('fluency', 'N/A')}/100", 
-            f"- Prosody: {dimensions.get('prosody', 'N/A')}/100",
-            f"- Stress: {dimensions.get('stress', 'N/A')}/100",
+            "Skor per Dimensi:",
+            f"- Akurasi: {dimensions.get('accuracy', 'N/A')}/100",
+            f"- Fluensi: {dimensions.get('fluency', 'N/A')}/100", 
+            f"- Prosodi: {dimensions.get('prosody', 'N/A')}/100",
+            f"- Tekanan: {dimensions.get('stress', 'N/A')}/100",
             ""
         ]
         
         # Add feature details if available
         if features:
             prompt_parts.extend([
-                "Detailed Analysis:",
+                "Analisis Terperinci:",
                 "",
-                "Fluency Features:",
+                "Fitur Fluensi:",
             ])
             
             # Safely extract fluency features (could be object or dict)
@@ -192,13 +193,13 @@ class GeminiFeedbackService:
                 ""
             ])
         
-        # Instructions for response format
+        # Instructions for response format - in Indonesian
         prompt_parts.extend([
-            "Please provide feedback in the following JSON format:",
+            "Mohon berikan umpan balik dalam format JSON berikut (DALAM BAHASA INDONESIA):",
             "{",
-            '  "overall_assessment": "Brief summary of performance",',
-            '  "strengths": ["List of 2-3 strengths"],',
-            '  "areas_to_focus": ["List of 2-3 specific areas"],',
+            '  "overall_assessment": "Ringkasan singkat tentang performa",',
+            '  "strengths": ["Daftar 2-3 kekuatan"],',
+            '  "areas_to_focus": ["Daftar 2-3 area spesifik untuk ditingkatkan"],',
             '  "detailed_feedback": {',
             '    "accuracy": {"analysis": "...", "recommendations": ["..."]},',
             '    "fluency": {"analysis": "...", "recommendations": ["..."]},',
@@ -206,16 +207,16 @@ class GeminiFeedbackService:
             '    "stress": {"analysis": "...", "recommendations": ["..."]}',
             '  },',
             '  "practice_suggestions": [',
-            '    "Specific exercises or practice methods",',
-            '    "Resources or materials to study"',
+            '    "Latihan spesifik atau metode praktik",',
+            '    "Sumber daya atau materi untuk dipelajari"',
             '  ],',
             '  "next_steps": [',
-            '    "Specific goals for next practice session",',
-            '    "Areas to monitor closely"',
+            '    "Tujuan spesifik untuk sesi praktik berikutnya",',
+            '    "Area yang harus dipantau dengan cermat"',
             '  ]',
             '}',
             "",
-            "Make the feedback encouraging, specific, and actionable. Focus on English-specific pronunciation challenges. Avoid generic responses."
+            "Berikan umpan balik yang mendorong, spesifik, dan dapat ditindaklanjuti. Fokus pada tantangan pengucapan Bahasa Inggris. Hindari respons generik. PENTING: Semua teks harus dalam BAHASA INDONESIA."
         ])
         
         return "\n".join(prompt_parts)
@@ -270,34 +271,34 @@ class GeminiFeedbackService:
         """Extract feedback from text response when JSON parsing fails."""
         return {
             "overall_assessment": response[:200] + "..." if len(response) > 200 else response,
-            "strengths": ["Pronunciation shows effort", "Good attempt at complex sounds"],
-            "areas_to_focus": ["Practice word stress patterns", "Work on fluency"],
+            "strengths": ["Pengucapan menunjukkan usaha", "Usaha baik pada suara kompleks"],
+            "areas_to_focus": ["Praktik pola stress kata", "Tingkatkan fluensi"],
             "detailed_feedback": {
-                "accuracy": {"analysis": "Focus on sound accuracy", "recommendations": ["Practice individual sounds"]},
-                "fluency": {"analysis": "Work on speech flow", "recommendations": ["Practice with rhythm"]},
-                "prosody": {"analysis": "Develop expressive speech", "recommendations": ["Vary pitch patterns"]},
-                "stress": {"analysis": "Improve stress placement", "recommendations": ["Learn English stress rules"]}
+                "accuracy": {"analysis": "Fokus pada akurasi suara", "recommendations": ["Praktik suara individual"]},
+                "fluency": {"analysis": "Tingkatkan aliran bicara", "recommendations": ["Praktik dengan ritme"]},
+                "prosody": {"analysis": "Kembangkan bicara ekspresif", "recommendations": ["Variasiasi pola pitch"]},
+                "stress": {"analysis": "Tingkatkan penempatan stress", "recommendations": ["Pelajari aturan stress Bahasa Inggris"]}
             },
             "practice_suggestions": [
-                "Practice with English pronunciation resources",
-                "Focus on specific error patterns"
+                "Praktik dengan sumber daya pengucapan Bahasa Inggris",
+                "Fokus pada pola kesalahan spesifik"
             ],
             "next_steps": [
-                "Continue practicing daily",
-                "Record and compare with native speakers"
+                "Lanjutkan praktik harian",
+                "Rekam dan bandingkan dengan penutur asli"
             ]
         }
     
     def _get_default_field_value(self, field: str) -> any:
         """Get default values for feedback fields."""
         defaults = {
-            "overall_assessment": "Good effort with room for improvement.",
-            "strengths": ["Clear pronunciation", "Good effort"],
-            "areas_to_focus": ["Continue practicing", "Focus on specific challenges"],
-            "practice_suggestions": ["Regular practice recommended", "Use pronunciation resources"],
-            "next_steps": ["Continue daily practice", "Focus on specific areas"]
+            "overall_assessment": "Usaha baik dengan ruang untuk perbaikan.",
+            "strengths": ["Pengucapan jelas", "Usaha bagus"],
+            "areas_to_focus": ["Lanjutkan praktik", "Fokus pada tantangan spesifik"],
+            "practice_suggestions": ["Praktik reguler disarankan", "Gunakan sumber daya pengucapan"],
+            "next_steps": ["Lanjutkan praktik harian", "Fokus pada area spesifik"]
         }
-        return defaults.get(field, ["Default feedback"])
+        return defaults.get(field, ["Umpan balik default"])
     
     def _enhance_with_english_insights(
         self, 
@@ -314,16 +315,16 @@ class GeminiFeedbackService:
         # Identify specific English challenges
         if dimensions.get('stress', 0) < 70:
             english_insights.append({
-                "challenge": "English word stress",
-                "explanation": "English has variable stress patterns that differ from many other languages",
-                "practice": "Practice noun-verb stress pairs (e.g., RECORD vs. reCORD)"
+                "challenge": "Stress kata Bahasa Inggris",
+                "explanation": "Bahasa Inggris memiliki pola stress variabel yang berbeda dari banyak bahasa lain",
+                "practice": "Praktik pasangan stress noun-verb (misalnya, RECORD vs. reCORD)"
             })
         
         if dimensions.get('prosody', 0) < 70:
             english_insights.append({
-                "challenge": "English intonation",
-                "explanation": "English uses pitch variation to convey meaning and emotion",
-                "practice": "Practice question intonation (rising pitch) vs statements (falling pitch)"
+                "challenge": "Intonasi Bahasa Inggris",
+                "explanation": "Bahasa Inggris menggunakan variasi pitch untuk menyampaikan makna dan emosi",
+                "practice": "Praktik intonasi pertanyaan (pitch naik) vs pernyataan (pitch turun)"
             })
         
         # Add to feedback
