@@ -232,8 +232,7 @@ class EnglishCEFRAssessment:
             )
             
         except Exception as e:
-            logger.error(f"CEFR assessment failed: {e}")
-            # Return default assessment
+            logger.error("CEFR assessment failed", error=str(e))
             return self._get_default_assessment(dimensions)
     
     def _calculate_level_probabilities(

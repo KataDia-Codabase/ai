@@ -18,6 +18,10 @@ from app.ml.services.error_detection import ErrorDetectionService, WordError
 from app.ml.services.phoneme_service import AlignmentResult
 from app.ml.services.scoring_service import ErrorDetail
 from app.ml.models.wav2vec_trainer import EnglishPronunciationAnalyzer
+from app.ml.services.optimized_model_loader import (
+    get_optimized_model_and_processor,
+    initialize_model_loader
+)
 
 logger = structlog.get_logger()
 
@@ -95,6 +99,12 @@ class EnhancedScoringService:
         self.accuracy_models: Dict[str, Wav2Vec2ForCTC] = {}
         self.accuracy_processors: Dict[str, Wav2Vec2Processor] = {}
         self._accuracy_ready: Dict[str, bool] = {}
+        
+        try:
+            initialize_model_loader()
+            logger.info("Optimized model loader initialized")
+        except Exception as e:
+            logger.warning("Failed to initialize optimized model loader", error=str(e))
 
     def supports_language(self, language: str) -> bool:
         """Return True if comprehensive scoring is available for language."""
@@ -208,8 +218,7 @@ class EnhancedScoringService:
             }
             
         except Exception as e:
-            logger.error(f"Comprehensive scoring failed: {e}")
-            # Return fallback scoring
+            logger.error("Comprehensive scoring failed", error=str(e))
             return await self._fallback_scoring(audio_path, transcript, language)
     
     async def _extract_fluency_features(self, y: np.ndarray, sr: int, transcript: str) -> FluencyFeatures:
@@ -268,7 +277,7 @@ class EnhancedScoringService:
             )
             
         except Exception as e:
-            logger.error(f"Fluency feature extraction failed: {e}")
+            logger.error("Fluency feature extraction failed", error=str(e))
             return FluencyFeatures(0, 0, 0, 0, 0, 0)
     
     async def _extract_prosody_features(self, y: np.ndarray, sr: int) -> ProsodyFeatures:
@@ -315,7 +324,7 @@ class EnhancedScoringService:
             )
             
         except Exception as e:
-            logger.error(f"Prosody feature extraction failed: {e}")
+            logger.error("Prosody feature extraction failed", error=str(e))
             return ProsodyFeatures(0, 0, 0, [], 0, 0)
     
     async def _extract_stress_features(self, y: np.ndarray, sr: int, transcript: str) -> StressFeatures:
@@ -360,7 +369,7 @@ class EnhancedScoringService:
             )
             
         except Exception as e:
-            logger.error(f"Stress feature extraction failed: {e}")
+            logger.error("Stress feature extraction failed", error=str(e))
             return StressFeatures(0, 0, 0, 0, [])
     
     def _calculate_emphasis_score(self, energy: np.ndarray) -> float:
@@ -409,7 +418,7 @@ class EnhancedScoringService:
 
         normalized_transcript = transcript.lower().strip()
 
-        if not self._load_accuracy_model(language):
+        if not await self._load_accuracy_model(language):
             logger.warning(
                 "Wav2Vec2 model not available; using heuristic accuracy",
                 language=language,
@@ -457,7 +466,7 @@ class EnhancedScoringService:
 
         return accuracy_score, recognized_text, wer_score
 
-    def _load_accuracy_model(self, language: str) -> bool:
+    async def _load_accuracy_model(self, language: str) -> bool:
         if self._accuracy_ready.get(language):
             return True
 
@@ -467,30 +476,43 @@ class EnhancedScoringService:
             self._accuracy_ready[language] = False
             return False
 
-        model_path = Path(model_path_str)
-        if not model_path.exists():
-            logger.warning(
-                "Fine-tuned model not found for language",
-                language=language,
-                path=str(model_path),
-            )
-            self._accuracy_ready[language] = False
-            return False
-
         try:
-            processor = Wav2Vec2Processor.from_pretrained(model_path)
-            model = Wav2Vec2ForCTC.from_pretrained(model_path)
-            model.to(self.device)
-            model.eval()
+            # Use optimized model loader to automatically load optimized version if available
+            model, processor, metadata = await get_optimized_model_and_processor(language)
+            
+            if model is None or processor is None:
+                logger.error(
+                    "Failed to load model and processor",
+                    language=language,
+                )
+                self._accuracy_ready[language] = False
+                return False
+            
             self.accuracy_processors[language] = processor
             self.accuracy_models[language] = model
             self._accuracy_ready[language] = True
+            
+            # Log which model was loaded (optimized or original)
+            model_type = metadata.get('model_type', 'unknown')
+            optimization_level = metadata.get('optimization_level', 0)
             logger.info(
-                "Loaded fine-tuned Wav2Vec2 model",
+                "Loaded Wav2Vec2 model",
                 language=language,
-                path=str(model_path),
+                model_type=model_type,
+                optimization_level=optimization_level,
+                device=self.device,
             )
+            
+            # Log performance metrics if available
+            perf_metrics = metadata.get('performance_metrics', {})
+            if perf_metrics:
+                logger.info(
+                    "Model optimization metrics",
+                    metrics=perf_metrics
+                )
+            
             return True
+            
         except Exception as exc:
             logger.error(
                 "Failed to load Wav2Vec2 model",

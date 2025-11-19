@@ -1,14 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, HTMLResponse
 from app.core.config import settings
-from app.api.endpoints import score, transcribe, feedback, health, analytics, ab_testing
+from app.api.endpoints import score, transcribe, feedback, health, analytics, ab_testing, optimizer
 from app.core.logging import setup_logging
+from app.ml.services.optimized_model_loader import initialize_model_loader
 import structlog
 import warnings
 import json
-from datetime import datetime
 
 # Suppress deprecation warnings from dependencies
 warnings.filterwarnings("ignore", category=UserWarning, module="praatio")
@@ -59,13 +58,17 @@ app.include_router(feedback.router, prefix=settings.API_V1_STR, tags=["feedback"
 app.include_router(health.router, prefix=settings.API_V1_STR, tags=["health"])
 app.include_router(analytics.router, prefix=settings.API_V1_STR, tags=["analytics"])
 app.include_router(ab_testing.router, prefix=settings.API_V1_STR, tags=["experiments"])
+app.include_router(optimizer.router, prefix=settings.API_V1_STR, tags=["optimization"])
 
 @app.on_event("startup")
 async def startup_event():
     logger.info("KataDia AI ML Service starting up...")
-    # Initialize ML models, database connections, etc.
-    # This will be implemented in subsequent sprints
-    pass
+    
+    try:
+        initialize_model_loader(base_model_path="./models/wav2vec2-english-finetuned")
+        logger.info("Optimized model loader initialized on startup")
+    except Exception as e:
+        logger.warning("Failed to initialize optimized model loader", error=str(e))
 
 @app.on_event("shutdown")
 async def shutdown_event():
