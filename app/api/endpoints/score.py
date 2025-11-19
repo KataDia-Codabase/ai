@@ -5,8 +5,10 @@ from pathlib import Path
 from datetime import datetime, timezone
 from dataclasses import asdict
 import aiofiles
+import hashlib
 
 from app.core.logging import get_logger
+from app.core.cache import get_cache, CacheKeys, generate_hash
 from app.ml.services.stt_service import STTService
 from app.ml.services.phoneme_service import PhonemeService
 from app.ml.services.scoring_service import ScoringResult
@@ -66,6 +68,7 @@ class ScoreResponse(BaseModel):
     audio_url: Optional[str] = None
     lesson_vocab_id: Optional[int] = None
     user_id: Optional[str] = None
+    cache_hit: bool = False  # Redis cache indicator
     created_at: datetime
 
 @router.post("/score", response_model=ScoreResponse)
@@ -127,6 +130,32 @@ async def score_pronunciation(
     try:
         # Start timing
         start_time = datetime.now()
+        
+        # Initialize cache
+        cache = get_cache()
+        
+        # Generate cache key based on transcript and user
+        transcript_hash = generate_hash(transcript)
+        cache_key = CacheKeys.scoring_key(user_id, transcript_hash, language)
+        
+        # Try to get from cache first
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            logger.info(
+                "Cache HIT for scoring",
+                user_id=user_id,
+                cache_key=cache_key
+            )
+            # Add cache metadata
+            cached_result["cache_hit"] = True
+            cached_result["processing_time"] = (datetime.now() - start_time).total_seconds()
+            return cached_result
+        
+        logger.info(
+            "Cache MISS for scoring",
+            user_id=user_id,
+            cache_key=cache_key
+        )
         
         # Log the request
         logger.info(
@@ -272,6 +301,17 @@ async def score_pronunciation(
             user_id=user_id,
             created_at=created_at
         )
+        
+        # Cache the result (7 days TTL)
+        try:
+            cache.set(
+                cache_key,
+                result_response.dict(),
+                ttl_seconds=CacheKeys.SCORING_TTL
+            )
+            logger.info("Scoring result cached", cache_key=cache_key)
+        except Exception as cache_error:
+            logger.warning("Failed to cache scoring result", error=str(cache_error))
         
         # Step 5: Cleanup auxiliary temp files (keep uploaded audio for traceability)
         try:

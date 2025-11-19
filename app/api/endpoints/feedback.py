@@ -2,7 +2,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from app.core.logging import get_logger
+from app.core.cache import get_cache, CacheKeys, generate_hash
 import structlog
+import json
 
 from app.ml.services.gemini_feedback import GeminiFeedbackService
 
@@ -34,6 +36,7 @@ class FeedbackResponse(BaseModel):
     specific_errors: List[ErrorDetail]
     improvement_suggestions: List[str]
     next_steps: List[str]
+    cache_hit: bool = False  # Redis cache indicator
 
 @router.post("/feedback", response_model=FeedbackResponse)
 async def generate_feedback(request: FeedbackRequest):
@@ -50,6 +53,31 @@ async def generate_feedback(request: FeedbackRequest):
     """
     
     try:
+        # Generate cache key based on feedback data
+        feedback_data_str = json.dumps(request.pronunciation_data.dict(), sort_keys=True)
+        feedback_hash = generate_hash(feedback_data_str)
+        cache_key = CacheKeys.feedback_key(request.user_id, feedback_hash)
+        
+        # Initialize cache
+        cache = get_cache()
+        
+        # Try to get from cache first
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            logger.info(
+                "Cache HIT for feedback",
+                user_id=request.user_id,
+                cache_key=cache_key
+            )
+            cached_result["cache_hit"] = True
+            return FeedbackResponse(**cached_result)
+        
+        logger.info(
+            "Cache MISS for feedback",
+            user_id=request.user_id,
+            cache_key=cache_key
+        )
+        
         logger.info(
             "Generating personalized feedback",
             user_id=request.user_id,
@@ -96,6 +124,17 @@ async def generate_feedback(request: FeedbackRequest):
             improvement_suggestions=final_feedback.get("practice_suggestions", default_feedback["practice_suggestions"]),
             next_steps=final_feedback.get("next_steps", default_feedback["next_steps"])
         )
+        
+        # Cache the result (7 days TTL)
+        try:
+            cache.set(
+                cache_key,
+                placeholder_feedback.dict(),
+                ttl_seconds=CacheKeys.FEEDBACK_TTL
+            )
+            logger.info("Feedback result cached", cache_key=cache_key)
+        except Exception as cache_error:
+            logger.warning("Failed to cache feedback result", error=str(cache_error))
         
         logger.info(
             "Feedback generation completed",

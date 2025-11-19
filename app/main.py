@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from app.core.config import settings
-from app.api.endpoints import score, transcribe, feedback, health, analytics, ab_testing, optimizer
+from app.api.endpoints import score, transcribe, feedback, health, analytics, ab_testing, optimizer, cache
 from app.core.logging import setup_logging
 from app.ml.services.optimized_model_loader import initialize_model_loader
 import structlog
@@ -59,6 +59,7 @@ app.include_router(health.router, prefix=settings.API_V1_STR, tags=["health"])
 app.include_router(analytics.router, prefix=settings.API_V1_STR, tags=["analytics"])
 app.include_router(ab_testing.router, prefix=settings.API_V1_STR, tags=["experiments"])
 app.include_router(optimizer.router, prefix=settings.API_V1_STR, tags=["optimization"])
+app.include_router(cache.router, prefix=settings.API_V1_STR, tags=["cache"])
 
 @app.on_event("startup")
 async def startup_event():
