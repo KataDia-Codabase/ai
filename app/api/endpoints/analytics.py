@@ -10,6 +10,7 @@ import structlog
 
 from app.ml.services.analytics import PronunciationAnalyticsService, ProgressAnalytics
 from app.ml.services.adaptive_learning import AdaptiveLearningService, PracticeRecommendation, DifficultyLevel
+from app.ml.services.practice_db import practice_db
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -171,57 +172,139 @@ async def get_practice_recommendations(
     - Rekomendasi durasi sesi yang optimal
     
     **Input:**
-    - `recent_performance`: List of recent scoring results
+    - `recent_performance`: List of recent scoring results dengan structure:
+      - `overall_score`: float (0-100)
+      - `dimensions`: Dict with accuracy, fluency, prosody, stress
+      - `errors`: List of error patterns (optional)
     - `current_level`: CEFR level (A1-C2)
-    - `user_id`: Untuk tracking
+    - `user_id`: User identifier untuk tracking
     
     **Logika:**
     1. Jika accuracy > 85% dan improving → tingkatkan difficulty
     2. Jika accuracy < 65% dan declining → turunkan difficulty
-    3. Identifikasi error patterns untuk focus areas
-    4. Pilih practice items yang relevan
-    5. Hitung optimal session duration
+    3. Identifikasi error patterns dari recent attempts
+    4. Pilih practice items yang relevan dengan weak areas
+    5. Hitung optimal session duration berdasarkan performa
+    6. Schedule next review dengan spaced repetition algorithm
     
     **Response:**
-    - Difficulty level berikutnya
-    - Focus areas untuk latihan
-    - Practice items yang specific
-    - Recommended session duration
+    - Difficulty level berikutnya (beginner-proficiency)
+    - Focus areas untuk latihan (accuracy, fluency, prosody, stress)
+    - Practice items yang specific dengan word/text
+    - Recommended session duration (15-60 minutes)
     - Next review date dengan spaced repetition
-    - Rationale untuk rekomendasi
+    - Rationale untuk rekomendasi dalam Bahasa Indonesia
+    
+    **Example Request:**
+    ```json
+    {
+      "user_id": "user_123",
+      "current_level": "B1",
+      "recent_performance": [
+        {
+          "overall_score": 72.5,
+          "dimensions": {
+            "accuracy": 75,
+            "fluency": 70,
+            "prosody": 65,
+            "stress": 75
+          }
+        }
+      ]
+    }
+    ```
     """
     try:
+        # Generate recommendation menggunakan adaptive learning service
         recommendation = await adaptive_learning_service.recommend_next_practice(
             user_id=user_id,
             current_level=current_level,
             recent_performance=recent_performance
         )
         
+        # Get practice items dari database
+        practice_items = await practice_db.get_practice_items(
+            difficulty=recommendation.difficulty_level.value,
+            focus_areas=recommendation.focus_areas
+        )
+        
+        # Update practice items dalam recommendation
+        recommendation.practice_items = practice_items
+        
+        # Save recommendation ke database
+        await practice_db.save_recommendation(user_id, recommendation)
+        
         logger.info(
             "Generated practice recommendation",
             user_id=user_id,
-            difficulty=recommendation.difficulty_level,
-            focus_areas=recommendation.focus_areas
+            difficulty=recommendation.difficulty_level.value,
+            focus_areas=recommendation.focus_areas,
+            practice_items_count=len(practice_items)
         )
         
         return PracticeRecommendationResponse(
             difficulty_level=recommendation.difficulty_level.value,
             focus_areas=recommendation.focus_areas,
-            practice_items=recommendation.practice_items,
+            practice_items=practice_items,
             session_duration_minutes=recommendation.session_duration_minutes,
             next_review_date=recommendation.next_review_date,
             rationale=recommendation.rationale
         )
         
     except Exception as e:
-        logger.error(f"Failed to generate recommendations: {e}")
+        logger.error(f"Failed to generate recommendations: {e}", error=str(e))
         raise HTTPException(status_code=500, detail="Recommendation generation failed")
+
+
+@router.get("/practice/history/{user_id}")
+async def get_practice_history(user_id: str):
+    """
+    Get practice history dan recommendations untuk user.
+    
+    **Returns:**
+    - Semua recommendations yang pernah diberikan
+    - Review history dengan scores dan dates
+    - Progress tracking
+    - Weak areas yang identified
+    
+    **Usage:**
+    - Tracking pembelajaran progress
+    - Analyzing practice patterns
+    - Identifying areas for improvement
+    """
+    try:
+        history = await practice_db.get_user_history(user_id)
+        
+        if not history:
+            return {
+                "user_id": user_id,
+                "recommendations": [],
+                "reviews": [],
+                "last_updated": None,
+                "message": "No practice history found for user"
+            }
+        
+        logger.info("Retrieved practice history", user_id=user_id)
+        
+        return {
+            "user_id": user_id,
+            "recommendations": history.get("recommendations", []),
+            "reviews": history.get("reviews", []),
+            "last_updated": history.get("last_updated"),
+            "total_recommendations": len(history.get("recommendations", [])),
+            "total_reviews": len(history.get("reviews", []))
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to retrieve practice history: {e}")
+        raise HTTPException(status_code=500, detail="History retrieval failed")
 
 
 @router.post("/practice/schedule-review")
 async def schedule_next_review(
     item_id: str = Body(...),
-    quality_score: float = Body(...)  # 0-5 scale
+    quality_score: float = Body(...),  # 0-5 scale
+    user_id: str = Body(...)
 ):
     """
     Schedule next review menggunakan SM-2 spaced repetition algorithm.
@@ -246,22 +329,36 @@ async def schedule_next_review(
     - Updated ease factor
     """
     try:
+        # Validate quality score
+        if not 0 <= quality_score <= 5:
+            raise HTTPException(status_code=400, detail="Quality score harus antara 0-5")
+        
+        # Schedule next review
         next_review = adaptive_learning_service.practice_scheduler.schedule_next_review(
             item_id, quality=quality_score
         )
         
+        # Record review ke database
+        await practice_db.record_review(item_id, quality_score, user_id)
+        
         logger.info(
             "Scheduled next review",
+            user_id=user_id,
             item_id=item_id,
             quality=quality_score,
             next_review=next_review
         )
         
         return {
+            "success": True,
+            "item_id": item_id,
+            "quality_score": quality_score,
             "next_review_date": next_review,
             "message": f"Review dijadwalkan untuk {next_review.strftime('%Y-%m-%d')}"
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to schedule review: {e}")
         raise HTTPException(status_code=500, detail="Review scheduling failed")
