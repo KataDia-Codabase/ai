@@ -79,13 +79,34 @@ async def score_pronunciation(
     audio_file: UploadFile = File(...)
 ):
     """
-    Score pronunciation from uploaded audio file.
+    Score pronunciation dari file audio yang diupload.
     
-    This endpoint will be fully implemented in Sprint 1-2 with:
-    - Audio processing and transcription
-    - Phoneme extraction and alignment
-    - Multi-dimensional scoring
-    - Error detection
+    **Endpoint terbaru dengan fitur lengkap:**
+    - Multi-dimensional scoring (akurasi, fluensi, prosodi, stress)
+    - Transkripsi audio otomatis via Google Cloud STT / Whisper
+    - Ekstraksi phoneme dengan Montreal Forced Aligner
+    - CEFR level assessment (A1-C2)
+    - AI-powered personalized feedback menggunakan Gemini 2.0 Flash
+    - Detailed error detection dan recommendations
+    - Output dalam bahasa Indonesia
+    
+    **Request Body:**
+    - `transcript`: Kalimat yang akan diucapkan
+    - `language`: Bahasa (saat ini hanya "en-US" yang didukung)
+    - `user_id`: ID pengguna untuk tracking
+    - `session_id`: ID sesi pembelajaran
+    - `audio_file`: File audio (WAV, MP3, M4A, OGG)
+    - `audio_url`: (Optional) URL audio eksternal
+    - `lesson_vocab_id`: (Optional) ID vocabulary untuk tracking
+    
+    **Response:**
+    - `overall_score`: Skor keseluruhan (0-100)
+    - `accuracy_score`, `fluency_score`, `prosody_score`, `stress_score`: Skor per dimensi
+    - `cefr_level`: Level CEFR (A1-C2)
+    - `personalized_feedback`: Umpan balik dari AI dalam bahasa Indonesia
+    - `feedback_details`: Detail lengkap tentang kekuatan dan area perbaikan
+    - `errors`: Daftar kesalahan pengucapan pada level phoneme
+    - `created_at`: Timestamp dalam UTC
     """
     
     # Simply accept any uploaded file - validation happens during processing
